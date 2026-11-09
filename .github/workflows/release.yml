@@ -1,0 +1,43 @@
+# Builds the Windows installer and attaches it to a draft GitHub Release.
+# Trigger: push a tag matching the app version, e.g. `git tag v1.0.0 && git push origin v1.0.0`.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the release and upload the installers
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Dev Launcher ${{ github.ref_name }}"
+          releaseBody: |
+            Windows installers (`.msi` and `-setup.exe`) are attached below.
+            The app is not code-signed: Windows SmartScreen may show "Windows protected your PC". Click "More info", then "Run anyway".
+            See CHANGELOG.md for what changed.
+          releaseDraft: true
+          prerelease: false

@@ -1,0 +1,60 @@
+{
+	"projects": [
+		{
+			"id": "my-app",
+			"name": "My App",
+			"color": "#7c3aed",
+			"services": [
+				{
+					"id": "my-app-backend",
+					"name": "Backend",
+					"icon": "python",
+					"cmd": "uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+					"cwd": "C:/path/to/my-app/backend",
+					"conda_env": "my-env"
+				},
+				{
+					"id": "my-app-frontend",
+					"name": "Frontend",
+					"icon": "node",
+					"cmd": "npm run dev -- --port 5173",
+					"cwd": "C:/path/to/my-app/frontend",
+					"conda_env": null
+				}
+			]
+		},
+		{
+			"id": "infra",
+			"name": "Infra",
+			"color": "#0ea5e9",
+			"services": [
+				{
+					"id": "redis",
+					"name": "Redis",
+					"icon": "docker",
+					"cmd": "docker start redis",
+					"cwd": "",
+					"conda_env": null
+				}
+			]
+		},
+		{
+			"id": "tools",
+			"name": "Tools",
+			"color": "#f59e0b",
+			"services": [
+				{
+					"id": "vscode",
+					"name": "VS Code",
+					"icon": "shell",
+					"cmd": "code C:/path/to/my-app",
+					"cwd": "",
+					"conda_env": null,
+					"service_type": "shell"
+				}
+			]
+		}
+	],
+	"opacity": 0.92,
+	"always_on_top": true
+}
