@@ -10,7 +10,10 @@ Built with **Tauri 2** (Rust) and **Vue 3**. **Windows only** for now; a macOS v
 
 ## Download
 
-Get the latest Windows installer (`.msi` or `-setup.exe`) from the [Releases](../../releases) page. Installers are built by GitHub Actions from the tagged source.
+From the [Releases](../../releases) page, built by GitHub Actions from the tagged source:
+
+- **`dev-launcher_<version>_portable.exe`**: download and run, nothing to install (needs WebView2, built into Windows 10 and 11);
+- **`dev-launcher_<version>_x64-setup.exe`**: installer with a Start menu shortcut and an uninstaller.
 
 The app is not code-signed, so Windows SmartScreen may warn on first launch: click **More info**, then **Run anyway**.
 

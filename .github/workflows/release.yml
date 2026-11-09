@@ -36,8 +36,19 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Dev Launcher ${{ github.ref_name }}"
           releaseBody: |
-            Windows installers (`.msi` and `-setup.exe`) are attached below.
+            - `dev-launcher_<version>_portable.exe`: download and run, nothing to install (needs WebView2, built into Windows 10 and 11).
+            - `dev-launcher_<version>_x64-setup.exe`: installer, with a Start menu shortcut and an uninstaller.
+
             The app is not code-signed: Windows SmartScreen may show "Windows protected your PC". Click "More info", then "Run anyway".
             See CHANGELOG.md for what changed.
           releaseDraft: true
           prerelease: false
+
+      - name: Attach the portable exe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          name="dev-launcher_${GITHUB_REF_NAME#v}_portable.exe"
+          cp src-tauri/target/release/dev-launcher.exe "$name"
+          gh release upload "$GITHUB_REF_NAME" "$name" --clobber
