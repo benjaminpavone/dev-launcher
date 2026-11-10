@@ -642,7 +642,7 @@ mod tests {
 
 	#[test]
 	fn config_uses_defaults_for_missing_fields() {
-		let json = r#"{
+		let json = r##"{
 			"projects": [{
 				"id": "p",
 				"name": "Project",
@@ -655,7 +655,7 @@ mod tests {
 					"cwd": ""
 				}]
 			}]
-		}"#;
+		}"##;
 		let config: Config = serde_json::from_str(json).expect("minimal config should parse");
 		assert_eq!(config.opacity, 0.92);
 		assert!(config.always_on_top);
