@@ -555,4 +555,131 @@ mod tests {
 		assert!(alive(&tree).is_empty(), "still alive: {:?}", alive(&tree));
 		println!("killed {} processes in {:?}", tree.len(), elapsed);
 	}
+
+	// ── Logs ──
+
+	#[test]
+	fn strip_ansi_removes_color_codes() {
+		assert_eq!(strip_ansi("\x1b[32mOK\x1b[0m"), "OK");
+		assert_eq!(strip_ansi("\x1b[1;31mERROR\x1b[0m: failed"), "ERROR: failed");
+	}
+
+	#[test]
+	fn strip_ansi_keeps_plain_text() {
+		assert_eq!(strip_ansi("Server started on port 8000"), "Server started on port 8000");
+		assert_eq!(strip_ansi("déjà vu ✓"), "déjà vu ✓");
+		assert_eq!(strip_ansi(""), "");
+	}
+
+	#[test]
+	fn strip_ansi_drops_a_lone_escape() {
+		assert_eq!(strip_ansi("abc\x1b"), "abc");
+	}
+
+	#[test]
+	fn detect_level_finds_errors_and_warnings() {
+		assert_eq!(detect_level("ERROR: connection refused"), "error");
+		assert_eq!(detect_level("Critical failure"), "error");
+		assert_eq!(detect_level("Warning: deprecated option"), "warn");
+		assert_eq!(detect_level("[WARN] slow query"), "warn");
+		assert_eq!(detect_level("Server started"), "");
+	}
+
+	#[test]
+	fn detect_level_prefers_error_over_warning() {
+		assert_eq!(detect_level("warning: build failed with an error"), "error");
+	}
+
+	// ── Config ──
+
+	fn service(cmd: &str, cwd: &str, conda_env: Option<&str>, service_type: Option<&str>) -> ServiceConfig {
+		ServiceConfig {
+			id: "id".to_string(),
+			name: "name".to_string(),
+			icon: "icon".to_string(),
+			cmd: cmd.to_string(),
+			cwd: cwd.to_string(),
+			conda_env: conda_env.map(str::to_string),
+			service_type: service_type.map(str::to_string),
+		}
+	}
+
+	#[test]
+	fn docker_container_is_read_from_docker_start() {
+		assert_eq!(service("docker start redis", "", None, None).docker_container().as_deref(), Some("redis"));
+		assert_eq!(service("  docker   start   redis  ", "", None, None).docker_container().as_deref(), Some("redis"));
+	}
+
+	#[test]
+	fn docker_container_is_none_for_other_commands() {
+		assert_eq!(service("docker stop redis", "", None, None).docker_container(), None);
+		assert_eq!(service("docker start", "", None, None).docker_container(), None);
+		assert_eq!(service("npm run dev", "", None, None).docker_container(), None);
+		assert_eq!(service("", "", None, None).docker_container(), None);
+	}
+
+	#[test]
+	fn conda_env_ignores_blank_values() {
+		assert_eq!(service("cmd", "", None, None).conda_env(), None);
+		assert_eq!(service("cmd", "", Some(""), None).conda_env(), None);
+		assert_eq!(service("cmd", "", Some("   "), None).conda_env(), None);
+		assert_eq!(service("cmd", "", Some(" my-env "), None).conda_env(), Some("my-env"));
+	}
+
+	#[test]
+	fn cwd_ignores_blank_values() {
+		assert_eq!(service("cmd", "", None, None).cwd(), None);
+		assert_eq!(service("cmd", "   ", None, None).cwd(), None);
+		assert_eq!(service("cmd", " C:/my-app ", None, None).cwd(), Some("C:/my-app"));
+	}
+
+	#[test]
+	fn is_shell_only_for_shell_type() {
+		assert!(service("code .", "", None, Some("shell")).is_shell());
+		assert!(!service("npm run dev", "", None, None).is_shell());
+		assert!(!service("npm run dev", "", None, Some("")).is_shell());
+	}
+
+	#[test]
+	fn config_uses_defaults_for_missing_fields() {
+		let json = r#"{
+			"projects": [{
+				"id": "p",
+				"name": "Project",
+				"color": "#000000",
+				"services": [{
+					"id": "s",
+					"name": "Service",
+					"icon": "node",
+					"cmd": "npm run dev",
+					"cwd": ""
+				}]
+			}]
+		}"#;
+		let config: Config = serde_json::from_str(json).expect("minimal config should parse");
+		assert_eq!(config.opacity, 0.92);
+		assert!(config.always_on_top);
+		let svc = &config.projects[0].services[0];
+		assert_eq!(svc.service_type, None);
+		assert_eq!(svc.conda_env, None);
+		assert!(!svc.is_shell());
+	}
+
+	#[test]
+	fn config_keeps_explicit_values() {
+		let json = r#"{ "projects": [], "opacity": 0.5, "always_on_top": false }"#;
+		let config: Config = serde_json::from_str(json).expect("config should parse");
+		assert_eq!(config.opacity, 0.5);
+		assert!(!config.always_on_top);
+	}
+
+	#[test]
+	fn default_config_parses() {
+		let config: Config = serde_json::from_str(DEFAULT_CONFIG).expect("embedded config.json should parse");
+		assert!(!config.projects.is_empty());
+		let services: Vec<&ServiceConfig> = config.projects.iter().flat_map(|p| p.services.iter()).collect();
+		assert!(services.iter().any(|s| s.docker_container().is_some()));
+		assert!(services.iter().any(|s| s.is_shell()));
+		assert!(services.iter().any(|s| s.conda_env().is_some()));
+	}
 }

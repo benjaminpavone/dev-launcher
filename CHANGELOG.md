@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Unit tests** for the pure Rust logic: ANSI stripping, log level detection, service config helpers, config defaults and the embedded default config, run by the CI
+
 ## [1.0.0] - 2026-11-09
 
 First public release.
