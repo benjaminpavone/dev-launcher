@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Port link**: a Normal service shows its port next to *Running* (`RUNNING · :5173`) once it answers, and a click opens it in the browser. The port is read from the first local URL the server prints in its logs (Vite, uvicorn, Flask, Django, Next.js, ASP.NET, Laravel…), with no setting to fill in
 - **macOS support, in progress**: the app builds, runs and passes its tests on macOS, and the CI checks both systems. The window is not blurred on macOS, where it is more opaque by default (97%, at least 85%). No macOS release yet
 - **Unit tests** for the pure Rust logic: ANSI stripping, log level detection, service config helpers, config defaults and the embedded default config, run by the CI
 

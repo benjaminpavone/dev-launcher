@@ -73,6 +73,7 @@
 						:service="svc"
 						@toggle="toggleService"
 						@clearLogs="clearLogs"
+						@openUrl="openUrl"
 					/>
 				</div>
 			</div>
@@ -124,6 +125,7 @@ async function loadConfig() {
 			services: p.services.map(s => ({
 				...s,
 				status: previous.get(s.id)?.status ?? "stopped",
+				port: previous.get(s.id)?.port ?? null,
 				logs: previous.get(s.id)?.logs ?? [],
 			})),
 		}));
@@ -153,14 +155,23 @@ async function onConfigSaved() {
 // ── Status polling ─────────────────────────────────────────────────────────
 // Services with a start or stop in progress are skipped: their status is set by toggleService.
 let pollInterval = null;
+async function pollService(svc) {
+	if (svc.pending) return;
+	try {
+		const { status, port } = await invoke("get_service_status", { serviceId: svc.id });
+		if (!svc.pending) Object.assign(svc, { status, port });
+	} catch {}
+}
 async function pollOnce() {
-	await Promise.all(allServices.value.map(async svc => {
-		if (svc.pending) return;
-		try {
-			const status = await invoke("get_service_status", { serviceId: svc.id });
-			if (!svc.pending) svc.status = status;
-		} catch {}
-	}));
+	await Promise.all(allServices.value.map(pollService));
+}
+// After a start, checks every second until the server answers on the port it printed,
+// instead of waiting for the next 10-second poll.
+async function watchPort(svc) {
+	for (let i = 0; i < 60 && svc.status === "running" && !svc.port; i++) {
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		await pollService(svc);
+	}
 }
 function startPolling() {
 	clearInterval(pollInterval);
@@ -206,6 +217,7 @@ async function toggleService(id) {
 		if (isUp(svc)) {
 			await invoke("stop_service", { serviceId: id });
 			svc.status = "stopped";
+			svc.port = null;
 		} else {
 			svc.status = "starting";
 			await invoke("start_service", { serviceId: id });
@@ -213,16 +225,26 @@ async function toggleService(id) {
 		}
 	} catch (e) {
 		svc.status = "error";
+		svc.port = null;
 		svc.logs.push({ time: new Date().toTimeString().slice(0, 8), text: String(e), level: "error" });
 	} finally {
 		svc.pending = false;
 	}
+	watchPort(svc);
 }
 
 function toggleProject(project) {
 	const allUp = isProjectUp(project);
 	for (const svc of project.services) {
 		if (allUp || !isUp(svc)) toggleService(svc.id);
+	}
+}
+
+async function openUrl(id) {
+	try {
+		await invoke("open_service_url", { serviceId: id });
+	} catch (e) {
+		console.error("Failed to open the service URL:", e);
 	}
 }
 

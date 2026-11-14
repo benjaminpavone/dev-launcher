@@ -26,6 +26,10 @@
 				<span class="svc-status">
 					<span class="status-dot"></span>
 					{{ statusLabel }}
+					<template v-if="service.status === 'running' && service.port">
+						<span class="svc-port-sep">·</span>
+						<button class="svc-port" @click="$emit('openUrl', service.id)" title="Open in browser">:{{ service.port }}</button>
+					</template>
 				</span>
 			</div>
 
@@ -169,7 +173,7 @@ import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 const props = defineProps({
 	service: { type: Object, required: true },
 });
-defineEmits(["toggle", "clearLogs"]);
+defineEmits(["toggle", "clearLogs", "openUrl"]);
 
 const showLogs = ref(false);
 const showLogsModal = ref(false);
@@ -304,6 +308,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	text-transform: uppercase; letter-spacing: 0.4px;
 }
 .status--running .svc-status  { color: #4ade80; }
+.svc-port-sep { color: rgba(255,255,255,0.5); }
+.svc-port {
+	background: none; border: none; padding: 0;
+	font: inherit; letter-spacing: inherit;
+	color: rgba(255,255,255,0.6); cursor: pointer;
+}
+.svc-port:hover { color: rgba(255,255,255,0.9); text-decoration: underline; }
 .status--launched .svc-status { color: #818cf8; }
 .status--error   .svc-status  { color: #f87171; }
 .status--starting .svc-status { color: #facc15; }

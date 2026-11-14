@@ -4,8 +4,10 @@ use std::io::{BufRead, BufReader, Read};
 use std::os::unix::process::CommandExt;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -95,6 +97,8 @@ struct AppState {
 	processes: Mutex<HashMap<String, Child>>,
 	/// Shell services launched this session
 	shell_services: Mutex<HashSet<String>>,
+	/// First local URL printed by each running normal service, by service id
+	urls: Mutex<HashMap<String, LocalUrl>>,
 }
 
 fn config_path(app: &AppHandle) -> std::path::PathBuf {
@@ -367,11 +371,87 @@ fn pipe_logs<R: Read + Send + 'static>(app: AppHandle, service_id: String, pipe:
 				Ok(0) | Err(_) => break,
 				Ok(_) => {
 					let line = String::from_utf8_lossy(&buf);
-					emit_log(&app, &service_id, line.trim_end_matches(['\r', '\n']));
+					let line = line.trim_end_matches(['\r', '\n']);
+					remember_url(&app, &service_id, line);
+					emit_log(&app, &service_id, line);
 				}
 			}
 		}
 	});
+}
+
+// ── Local URL ─────────────────────────────────────────────────────────────────
+
+/// A dev server address on this machine, read from its logs
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct LocalUrl {
+	https: bool,
+	port: u16,
+}
+
+impl LocalUrl {
+	fn to_url(self) -> String {
+		let scheme = if self.https { "https" } else { "http" };
+		format!("{}://localhost:{}", scheme, self.port)
+	}
+}
+
+/// Hosts that mean "this machine" in the address a dev server prints
+const LOCAL_HOSTS: [&str; 5] = ["localhost", "127.0.0.1", "0.0.0.0", "::1", "::"];
+
+/// First local URL with a port in a log line (ANSI codes already stripped), such as
+/// Vite's `Local: http://localhost:5173/` or `Uvicorn running on http://127.0.0.1:8000`.
+fn find_local_url(text: &str) -> Option<LocalUrl> {
+	let mut rest = text;
+	while let Some(i) = rest.find("://") {
+		// The scheme is the word right before "://" (`[http://…` is fine, `xhttp://…` is not)
+		let scheme = rest[..i].rsplit(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or("");
+		let https = scheme.eq_ignore_ascii_case("https");
+		let after = &rest[i + 3..];
+		rest = after;
+		if !https && !scheme.eq_ignore_ascii_case("http") {
+			continue;
+		}
+		let (host, tail) = match after.strip_prefix('[') {
+			Some(inner) => match inner.find(']') {
+				Some(end) => (&inner[..end], &inner[end + 1..]),
+				None => continue,
+			},
+			None => {
+				let end = after.find([':', '/', ' ', ']']).unwrap_or(after.len());
+				(&after[..end], &after[end..])
+			}
+		};
+		if !LOCAL_HOSTS.contains(&host.to_ascii_lowercase().as_str()) {
+			continue;
+		}
+		let Some(tail) = tail.strip_prefix(':') else { continue };
+		let digits = tail.find(|c: char| !c.is_ascii_digit()).unwrap_or(tail.len());
+		match tail[..digits].parse::<u16>() {
+			Ok(port) if port > 0 => return Some(LocalUrl { https, port }),
+			_ => continue,
+		}
+	}
+	None
+}
+
+/// Keeps the first local URL a service prints, until it is stopped or restarted
+fn remember_url(app: &AppHandle, service_id: &str, raw: &str) {
+	let state = app.state::<AppState>();
+	if state.urls.lock().unwrap().contains_key(service_id) {
+		return;
+	}
+	if let Some(url) = find_local_url(&strip_ansi(raw)) {
+		state.urls.lock().unwrap().entry(service_id.to_string()).or_insert(url);
+	}
+}
+
+/// Whether something accepts connections on this port, over IPv4 or IPv6
+fn port_is_open(port: u16) -> bool {
+	let timeout = Duration::from_millis(200);
+	[IpAddr::V4(Ipv4Addr::LOCALHOST), IpAddr::V6(Ipv6Addr::LOCALHOST)]
+		.into_iter()
+		.any(|ip| TcpStream::connect_timeout(&SocketAddr::new(ip, port), timeout).is_ok())
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -398,6 +478,7 @@ async fn save_config(app: AppHandle, state: State<'_, AppState>, config: Config)
 		.map(|s| s.id.as_str())
 		.collect();
 	state.shell_services.lock().unwrap().retain(|id| kept.contains(id.as_str()));
+	state.urls.lock().unwrap().retain(|id, _| kept.contains(id.as_str()));
 	let orphans: Vec<Child> = {
 		let mut procs = state.processes.lock().unwrap();
 		let removed: Vec<String> = procs.keys().filter(|id| !kept.contains(id.as_str())).cloned().collect();
@@ -464,6 +545,7 @@ async fn start_service(app: AppHandle, state: State<'_, AppState>, service_id: S
 		Some(env) => format!("conda run --no-capture-output -n {} {}", env, service.cmd.trim()),
 		None => service.cmd.trim().to_string(),
 	};
+	state.urls.lock().unwrap().remove(&service_id);
 	let mut cmd = hidden_cmd(&command_line);
 	cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 	if let Some(cwd) = service.cwd() {
@@ -499,6 +581,7 @@ async fn stop_service(app: AppHandle, state: State<'_, AppState>, service_id: St
 		};
 	}
 
+	state.urls.lock().unwrap().remove(&service_id);
 	let child = state.processes.lock().unwrap().remove(&service_id);
 	if let Some(child) = child {
 		kill_all_async(vec![child]).await;
@@ -506,30 +589,68 @@ async fn stop_service(app: AppHandle, state: State<'_, AppState>, service_id: St
 	Ok(())
 }
 
-#[tauri::command]
-async fn get_service_status(app: AppHandle, state: State<'_, AppState>, service_id: String) -> Result<String, String> {
-	if state.shell_services.lock().unwrap().contains(&service_id) {
-		return Ok("launched".to_string());
+#[derive(Serialize)]
+struct ServiceStatus {
+	status: String,
+	/// Port of the service's local URL, once it accepts connections
+	port: Option<u16>,
+}
+
+impl ServiceStatus {
+	fn new(status: &str) -> Self {
+		ServiceStatus { status: status.to_string(), port: None }
 	}
-	{
-		let mut procs = state.processes.lock().unwrap();
-		if let Some(child) = procs.get_mut(&service_id) {
-			let status = match child.try_wait() {
-				Ok(None) => "running",
-				Ok(Some(exit)) if exit.success() => "stopped",
-				_ => "error",
-			};
-			return Ok(status.to_string());
+}
+
+#[tauri::command]
+async fn get_service_status(app: AppHandle, state: State<'_, AppState>, service_id: String) -> Result<ServiceStatus, String> {
+	if state.shell_services.lock().unwrap().contains(&service_id) {
+		return Ok(ServiceStatus::new("launched"));
+	}
+	let status = state.processes.lock().unwrap().get_mut(&service_id).map(|child| match child.try_wait() {
+		Ok(None) => "running",
+		Ok(Some(exit)) if exit.success() => "stopped",
+		_ => "error",
+	});
+	if let Some(status) = status {
+		let mut result = ServiceStatus::new(status);
+		let url = state.urls.lock().unwrap().get(&service_id).copied();
+		if let (Some(url), "running") = (url, status) {
+			let open = tauri::async_runtime::spawn_blocking(move || port_is_open(url.port))
+				.await
+				.map_err(|e| e.to_string())?;
+			result.port = open.then_some(url.port);
 		}
+		return Ok(result);
 	}
 	// Docker containers are checked even if started outside the app
 	let container = find_service(&app, &state, &service_id).ok().and_then(|s| s.docker_container());
 	match container {
 		Some(container) => tauri::async_runtime::spawn_blocking(move || docker_status(&container))
 			.await
+			.map(|status| ServiceStatus::new(&status))
 			.map_err(|e| e.to_string()),
-		None => Ok("stopped".to_string()),
+		None => Ok(ServiceStatus::new("stopped")),
 	}
+}
+
+/// Opens the service's local URL in the default browser. The URL is built here from
+/// what the service printed, so the webview can only open localhost addresses.
+#[tauri::command]
+fn open_service_url(state: State<'_, AppState>, service_id: String) -> Result<(), String> {
+	let url = state.urls.lock().unwrap().get(&service_id).copied().ok_or("No local URL for this service")?;
+	#[cfg(windows)]
+	let mut cmd = hidden_cmd(&format!("start \"\" {}", url.to_url()));
+	#[cfg(target_os = "macos")]
+	let mut cmd = Command::new("open");
+	#[cfg(all(unix, not(target_os = "macos")))]
+	let mut cmd = Command::new("xdg-open");
+	#[cfg(unix)]
+	cmd.arg(url.to_url());
+	let mut child = cmd.spawn().map_err(|e| format!("Cannot open the browser: {}", e))?;
+	// Reaps the launcher once it exits, so it does not stay as a zombie process
+	std::thread::spawn(move || child.wait());
+	Ok(())
 }
 
 /// Stops every process (Docker containers are left running), then exits.
@@ -553,6 +674,7 @@ pub fn run() {
 			start_service,
 			stop_service,
 			get_service_status,
+			open_service_url,
 			shutdown,
 		])
 		.build(tauri::generate_context!())
@@ -569,6 +691,13 @@ pub fn run() {
 mod tests {
 	use super::*;
 
+	/// Serializes the tests that spawn processes and the ones that open sockets: a process
+	/// spawned while a socket is being created can inherit it and keep its port open.
+	fn serial() -> std::sync::MutexGuard<'static, ()> {
+		static LOCK: Mutex<()> = Mutex::new(());
+		LOCK.lock().unwrap_or_else(|e| e.into_inner())
+	}
+
 	#[cfg(windows)]
 	fn alive(pids: &[u32]) -> Vec<u32> {
 		let table = process_table();
@@ -579,6 +708,7 @@ mod tests {
 	#[cfg(windows)]
 	#[test]
 	fn kill_all_kills_the_whole_tree() {
+		let _guard = serial();
 		let child = hidden_cmd("start /B ping -n 60 127.0.0.1 >NUL & cmd /C ping -n 60 127.0.0.1 >NUL")
 			.spawn()
 			.expect("spawn test tree");
@@ -615,6 +745,7 @@ mod tests {
 	#[cfg(unix)]
 	#[test]
 	fn kill_all_kills_the_whole_tree() {
+		let _guard = serial();
 		let child = hidden_cmd("sleep 60 & sleep 60 & wait").spawn().expect("spawn test tree");
 		let pgid = child.id();
 		let started = wait_for(|| group_members(pgid).len() >= 3);
@@ -762,5 +893,77 @@ mod tests {
 		assert!(services.iter().any(|s| s.docker_container().is_some()));
 		assert!(services.iter().any(|s| s.is_shell()));
 		assert!(services.iter().any(|s| s.conda_env().is_some()));
+	}
+
+	fn http(port: u16) -> Option<LocalUrl> {
+		Some(LocalUrl { https: false, port })
+	}
+
+	#[test]
+	fn find_local_url_reads_dev_server_banners() {
+		let banners = [
+			("  ➜  Local:   http://localhost:5173/", 5173),                                   // Vite
+			("INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)", 8000), // uvicorn
+			("INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)", 8080),
+			(" * Running on http://127.0.0.1:5000", 5000),                                       // Flask
+			("Starting development server at http://127.0.0.1:8000/", 8000),                    // Django
+			("   - Local:        http://localhost:3000", 3000),                                  // Next.js
+			("   INFO  Server running on [http://127.0.0.1:8000].", 8000),                       // Laravel
+			("[2026-11-14 10:00:00 +0100] [123] [INFO] Running on http://[::]:8000 (CTRL + C to quit)", 8000), // Hypercorn
+			("Listening on http://[::1]:4321/", 4321),
+			("Server at HTTP://LOCALHOST:9000", 9000),
+		];
+		for (line, port) in banners {
+			assert_eq!(find_local_url(line), http(port), "{line}");
+		}
+	}
+
+	#[test]
+	fn find_local_url_keeps_https() {
+		let line = "      Now listening on: https://localhost:7001"; // ASP.NET
+		assert_eq!(find_local_url(line), Some(LocalUrl { https: true, port: 7001 }));
+		assert_eq!(LocalUrl { https: true, port: 7001 }.to_url(), "https://localhost:7001");
+	}
+
+	#[test]
+	fn find_local_url_reads_colored_vite_output() {
+		let raw = "  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://localhost:\x1b[1m5173\x1b[22m/\x1b[39m";
+		assert_eq!(find_local_url(&strip_ansi(raw)), http(5173));
+	}
+
+	#[test]
+	fn find_local_url_keeps_the_first_local_one() {
+		let line = "see https://vitejs.dev/config or http://192.168.1.20:5173, local http://localhost:5174 and http://localhost:5175";
+		assert_eq!(find_local_url(line), http(5174));
+	}
+
+	#[test]
+	fn find_local_url_ignores_lines_without_a_local_port() {
+		for line in [
+			"",
+			"VITE v8.0.0  ready in 312 ms",
+			"  ➜  Network: http://192.168.1.20:5173/",
+			"Docs at https://fastapi.tiangolo.com",
+			"http://localhost/ has no port",
+			"ftp://localhost:21",
+			"xhttp://localhost:3000",
+			"foohttps://localhost:3000",
+			"http://localhost:0",
+			"http://localhost:99999",
+			"http://[::1",
+			"localhost:3000 without a scheme",
+		] {
+			assert_eq!(find_local_url(line), None, "{line}");
+		}
+	}
+
+	#[test]
+	fn port_is_open_follows_a_real_listener() {
+		let _guard = serial();
+		let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind a free port");
+		let port = listener.local_addr().unwrap().port();
+		assert!(port_is_open(port));
+		drop(listener);
+		assert!(!port_is_open(port));
 	}
 }

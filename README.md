@@ -30,7 +30,7 @@ The app is not code-signed, so Windows SmartScreen may warn on first launch: cli
 
 ## Service types
 
-- **Normal**: the app runs the command and tracks it: *Running*, *Stopped*, or *Error* if it exits with an error. **Stop** kills the process and all its child processes, so the port is free as soon as the service shows as stopped.
+- **Normal**: the app runs the command and tracks it: *Running*, *Stopped*, or *Error* if it exits with an error. **Stop** kills the process and all its child processes, so the port is free as soon as the service shows as stopped. When the server prints its local address in its logs (`http://localhost:5173`, `Uvicorn running on http://127.0.0.1:8000`…), the port shows next to *Running* once it answers, as `RUNNING · :5173`: click it to open the app in your browser. The first local address the server prints is the one used, so a server that prints another address first (a proxy target, a database) shows that port instead.
 - **Docker**: a Normal service whose command is `docker start <container>` is handled as a container. Its status comes from `docker ps`, even when the container was started outside the app, and **Stop** runs `docker stop`.
 - **Shell** (fire & forget): opens an app such as VS Code, Teams or a `.bat`. It shows as *Launched* but is not tracked: clicking its button again only marks it as stopped, nothing is killed.
 
