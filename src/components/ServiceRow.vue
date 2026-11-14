@@ -485,7 +485,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .log-empty { font-size: 10px; color: rgba(255,255,255,0.15); font-style: italic; }
 .log-line { display: flex; gap: 8px; font-size: 10px; line-height: 1.6; }
 .log-time { color: rgba(255,255,255,0.18); flex-shrink: 0; font-variant-numeric: tabular-nums; user-select: text; }
-.log-text { color: rgba(255,255,255,0.5); word-break: break-all; font-family: "Cascadia Code","Consolas",monospace; user-select: text; }
+.log-text { color: rgba(255,255,255,0.5); word-break: break-all; font-family: "Cascadia Code","Consolas","SF Mono","Menlo",monospace; user-select: text; }
 .log-text.error { color: #fca5a5; }
 .log-text.warn  { color: #fde68a; }
 

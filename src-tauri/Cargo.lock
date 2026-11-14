@@ -567,6 +567,7 @@ name = "dev-launcher"
 version = "1.0.0"
 dependencies = [
  "chrono",
+ "libc",
  "serde",
  "serde_json",
  "tauri",

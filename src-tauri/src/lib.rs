@@ -1,5 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::Mutex;
@@ -8,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Prevents a console window from flashing for each spawned process.
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Default config embedded at compile time, copied to the app data folder on first launch.
@@ -68,8 +72,13 @@ struct Config {
 	always_on_top: bool,
 }
 
+/// Higher on macOS, where the background behind the widget is not blurred (see App.vue).
 fn default_opacity() -> f64 {
-	0.92
+	if cfg!(target_os = "macos") {
+		0.97
+	} else {
+		0.92
+	}
 }
 
 fn default_always_on_top() -> bool {
@@ -139,6 +148,7 @@ fn find_service(app: &AppHandle, state: &AppState, service_id: &str) -> Result<S
 
 /// Runs a command line through cmd.exe without a console window.
 /// `/S /C "<line>"` makes cmd strip only the outer quotes, so quoted arguments survive.
+#[cfg(windows)]
 fn hidden_cmd(command_line: &str) -> Command {
 	let mut cmd = Command::new("cmd");
 	cmd.raw_arg(format!("/S /C \"{}\"", command_line))
@@ -146,13 +156,22 @@ fn hidden_cmd(command_line: &str) -> Command {
 	cmd
 }
 
+/// Runs a command line through sh, in its own process group so that stopping it
+/// can kill the whole group, children included.
+#[cfg(unix)]
+fn hidden_cmd(command_line: &str) -> Command {
+	let mut cmd = Command::new("sh");
+	cmd.arg("-c").arg(command_line).process_group(0);
+	cmd
+}
+
 /// Calls docker directly (not through cmd, which would eat the `^` of the name filter).
 fn docker(args: &[&str]) -> Result<Output, String> {
-	Command::new("docker")
-		.args(args)
-		.creation_flags(CREATE_NO_WINDOW)
-		.output()
-		.map_err(|e| format!("Cannot run docker: {}", e))
+	let mut cmd = Command::new("docker");
+	cmd.args(args);
+	#[cfg(windows)]
+	cmd.creation_flags(CREATE_NO_WINDOW);
+	cmd.output().map_err(|e| format!("Cannot run docker: {}", e))
 }
 
 fn docker_status(container: &str) -> String {
@@ -164,6 +183,7 @@ fn docker_status(container: &str) -> String {
 }
 
 /// (pid, parent pid) of every running process.
+#[cfg(windows)]
 fn process_table() -> Vec<(u32, u32)> {
 	use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
 	use windows_sys::Win32::System::Diagnostics::ToolHelp::{
@@ -189,6 +209,7 @@ fn process_table() -> Vec<(u32, u32)> {
 }
 
 /// Creation time of a process, None if it cannot be opened (gone, or not ours).
+#[cfg(windows)]
 fn creation_time(pid: u32) -> Option<u64> {
 	use windows_sys::Win32::Foundation::{CloseHandle, FILETIME};
 	use windows_sys::Win32::System::Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
@@ -206,6 +227,7 @@ fn creation_time(pid: u32) -> Option<u64> {
 	}
 }
 
+#[cfg(windows)]
 fn terminate(pid: u32) {
 	use windows_sys::Win32::Foundation::CloseHandle;
 	use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
@@ -223,6 +245,7 @@ fn terminate(pid: u32) {
 /// cmd.exe parent chain, which `taskkill /T` misses; walking the parent pid catches them.
 /// A parent pid can be reused by Windows once its process is gone: a "child" created before
 /// its supposed parent is an unrelated process and is left alone.
+#[cfg(windows)]
 fn kill_process_trees(roots: &[u32]) {
 	let table = process_table();
 	let mut tree = Vec::new();
@@ -250,6 +273,18 @@ fn kill_process_trees(roots: &[u32]) {
 	// Deepest processes first, so that no parent respawns a child already killed
 	for pid in tree.into_iter().rev() {
 		terminate(pid);
+	}
+}
+
+/// Kills processes and all their descendants: each root was started as the leader of its
+/// own process group (see `hidden_cmd`), so killing the group catches its children.
+#[cfg(unix)]
+fn kill_process_trees(roots: &[u32]) {
+	for &pid in roots {
+		// SAFETY: plain syscall, no memory involved; a group already gone only returns an error
+		unsafe {
+			libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+		}
 	}
 }
 
@@ -378,11 +413,22 @@ async fn start_service(app: AppHandle, state: State<'_, AppState>, service_id: S
 
 	// Shell services: fire & forget, nothing to track
 	if service.is_shell() {
+		#[cfg(windows)]
 		let mut cmd = hidden_cmd(&format!("start \"\" {}", service.cmd.trim()));
+		#[cfg(unix)]
+		let mut cmd = hidden_cmd(service.cmd.trim());
 		if let Some(cwd) = service.cwd() {
 			cmd.current_dir(cwd);
 		}
-		cmd.spawn().map_err(|e| format!("Failed to launch '{}': {}", service.name, e))?;
+		let child = cmd.spawn().map_err(|e| format!("Failed to launch '{}': {}", service.name, e))?;
+		// Reaps the shell once it exits, so it does not stay as a zombie process
+		#[cfg(unix)]
+		std::thread::spawn(move || {
+			let mut child = child;
+			let _ = child.wait();
+		});
+		#[cfg(windows)]
+		drop(child);
 		state.shell_services.lock().unwrap().insert(service_id);
 		return Ok(());
 	}
@@ -523,12 +569,14 @@ pub fn run() {
 mod tests {
 	use super::*;
 
+	#[cfg(windows)]
 	fn alive(pids: &[u32]) -> Vec<u32> {
 		let table = process_table();
 		pids.iter().copied().filter(|pid| table.iter().any(|(p, _)| p == pid)).collect()
 	}
 
 	/// cmd.exe with a nested cmd and a `start /B` child: every process of the tree must die.
+	#[cfg(windows)]
 	#[test]
 	fn kill_all_kills_the_whole_tree() {
 		let child = hidden_cmd("start /B ping -n 60 127.0.0.1 >NUL & cmd /C ping -n 60 127.0.0.1 >NUL")
@@ -554,6 +602,39 @@ mod tests {
 
 		assert!(alive(&tree).is_empty(), "still alive: {:?}", alive(&tree));
 		println!("killed {} processes in {:?}", tree.len(), elapsed);
+	}
+
+	/// Pids of the processes in a process group.
+	#[cfg(unix)]
+	fn group_members(pgid: u32) -> Vec<u32> {
+		let out = Command::new("pgrep").arg("-g").arg(pgid.to_string()).output().expect("run pgrep");
+		String::from_utf8_lossy(&out.stdout).lines().filter_map(|line| line.trim().parse().ok()).collect()
+	}
+
+	/// sh with two background children: every process of the group must die.
+	#[cfg(unix)]
+	#[test]
+	fn kill_all_kills_the_whole_tree() {
+		let child = hidden_cmd("sleep 60 & sleep 60 & wait").spawn().expect("spawn test tree");
+		let pgid = child.id();
+		let started = wait_for(|| group_members(pgid).len() >= 3);
+		assert!(started, "expected sh, sleep, sleep; got {:?}", group_members(pgid));
+
+		kill_all(vec![child]);
+		let killed = wait_for(|| group_members(pgid).is_empty());
+		assert!(killed, "still alive: {:?}", group_members(pgid));
+	}
+
+	/// Polls for up to 2 seconds: processes start and disappear with a delay on a busy machine.
+	#[cfg(unix)]
+	fn wait_for(condition: impl Fn() -> bool) -> bool {
+		(0..20).any(|_| {
+			let done = condition();
+			if !done {
+				std::thread::sleep(std::time::Duration::from_millis(100));
+			}
+			done
+		})
 	}
 
 	// ── Logs ──
@@ -657,7 +738,7 @@ mod tests {
 			}]
 		}"##;
 		let config: Config = serde_json::from_str(json).expect("minimal config should parse");
-		assert_eq!(config.opacity, 0.92);
+		assert_eq!(config.opacity, default_opacity());
 		assert!(config.always_on_top);
 		let svc = &config.projects[0].services[0];
 		assert_eq!(svc.service_type, None);

@@ -1,5 +1,5 @@
 <template>
-	<div class="widget" :style="{ '--bg-alpha': opacity }">
+	<div class="widget" :class="{ 'is-mac': isMac }" :style="{ '--bg-alpha': opacity }">
 		<!-- Shimmer top border -->
 		<div class="shimmer"></div>
 
@@ -12,7 +12,7 @@
 		/>
 
 		<!-- Header -->
-		<div class="widget-header">
+		<div class="widget-header" data-tauri-drag-region="deep">
 			<div class="header-left">
 				<div class="logo">
 					<span class="logo-dot"></span>
@@ -96,12 +96,13 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import ServiceRow from "./components/ServiceRow.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
+import { isMac, DEFAULT_OPACITY, MIN_OPACITY } from "./platform.js";
 
 const appVersion = __APP_VERSION__;
 
 const projects = ref([]);
-const rawConfig = ref({ projects: [], opacity: 0.92, always_on_top: true });
-const opacity = ref(0.92);
+const rawConfig = ref({ projects: [], opacity: DEFAULT_OPACITY, always_on_top: true });
+const opacity = ref(DEFAULT_OPACITY);
 const showSettings = ref(false);
 const isMaximized = ref(false);
 const MAX_LOG_LINES = 300;
@@ -114,7 +115,7 @@ async function loadConfig() {
 	try {
 		const config = await invoke("read_config");
 		rawConfig.value = config;
-		opacity.value = config.opacity ?? 0.92;
+		opacity.value = Math.max(config.opacity ?? DEFAULT_OPACITY, MIN_OPACITY);
 		getCurrentWindow().setAlwaysOnTop(config.always_on_top ?? true)
 			.catch(e => console.error("Failed to set always on top:", e));
 		const previous = new Map(allServices.value.map(s => [s.id, s]));
@@ -251,7 +252,7 @@ async function closeWindow() {
 	-webkit-backdrop-filter: blur(40px) saturate(180%);
 	border-radius: 18px;
 	border: 1px solid rgba(255,255,255,0.08);
-	font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+	font-family: "Segoe UI Variable", "Segoe UI", -apple-system, system-ui, sans-serif;
 	font-size: 12px; color: rgba(255,255,255,0.82);
 	overflow: hidden;
 	box-shadow:
@@ -261,6 +262,13 @@ async function closeWindow() {
 	user-select: none;
 	position: relative;
 }
+/* On macOS a CSS blur does not follow what is behind the transparent window: it keeps
+   the background of its first paint. The drag region is handled by data-tauri-drag-region. */
+.widget.is-mac {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+.widget.is-mac .widget-header { -webkit-app-region: none; }
 
 /* Top shimmer line */
 .shimmer {

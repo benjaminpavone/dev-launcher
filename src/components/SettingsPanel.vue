@@ -1,7 +1,7 @@
 <template>
 	<div class="settings-overlay" @click.self="$emit('close')">
 		<div class="settings-panel">
-			<div class="settings-header">
+			<div class="settings-header" :class="{ 'is-mac': isMac }" data-tauri-drag-region="deep">
 				<span class="settings-title">Settings</span>
 				<button class="icon-btn icon-btn--close" @click="$emit('close')">
 					<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -18,7 +18,7 @@
 						<span class="setting-value">{{ Math.round(localConfig.opacity * 100) }}%</span>
 					</div>
 					<input
-						type="range" min="0.2" max="1" step="0.01"
+						type="range" :min="MIN_OPACITY" max="1" step="0.01"
 						v-model.number="localConfig.opacity"
 						class="input--range"
 					/>
@@ -113,12 +113,14 @@
 import { ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { isMac, DEFAULT_OPACITY, MIN_OPACITY } from "../platform.js";
 
 const props = defineProps({ config: { type: Object, required: true } });
 const emit = defineEmits(["close", "saved"]);
 
 // Deep clone to avoid mutating parent before save
-const localConfig = ref({ opacity: 0.92, always_on_top: true, ...JSON.parse(JSON.stringify(props.config)) });
+const localConfig = ref({ opacity: DEFAULT_OPACITY, always_on_top: true, ...JSON.parse(JSON.stringify(props.config)) });
+localConfig.value.opacity = Math.max(localConfig.value.opacity, MIN_OPACITY);
 // A normal service has no service_type in the file: show it as "Normal" in the select
 localConfig.value.projects.forEach(p => p.services.forEach(s => { s.service_type ??= ""; }));
 
@@ -203,6 +205,7 @@ async function save() {
 	flex-shrink: 0;
 	-webkit-app-region: drag;
 }
+.settings-header.is-mac { -webkit-app-region: none; }
 .settings-title { font-size: 12px; font-weight: 650; color: rgba(255,255,255,0.75); }
 
 /* ── Body ── */
@@ -284,7 +287,7 @@ async function save() {
 .input--type { font-size: 10px; color: rgba(167,139,250,0.85); }
 .input--grow { flex: 1 1 0; width: auto; }
 .input--cwd { flex: 1; font-size: 10px; color: rgba(255,255,255,0.5); }
-.input--cmd { font-family: "Cascadia Code", "Consolas", monospace; font-size: 10px; }
+.input--cmd { font-family: "Cascadia Code", "Consolas", "SF Mono", "Menlo", monospace; font-size: 10px; }
 
 /* ── Buttons ── */
 .btn-browse {

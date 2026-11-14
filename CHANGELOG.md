@@ -4,6 +4,7 @@
 
 ### Added
 
+- **macOS support, in progress**: the app builds, runs and passes its tests on macOS, and the CI checks both systems. The window is not blurred on macOS, where it is more opaque by default (97%, at least 85%). No macOS release yet
 - **Unit tests** for the pure Rust logic: ANSI stripping, log level detection, service config helpers, config defaults and the embedded default config, run by the CI
 
 ## [1.0.0] - 2026-11-09
