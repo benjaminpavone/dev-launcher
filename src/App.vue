@@ -252,7 +252,6 @@ async function closeWindow() {
 	-webkit-backdrop-filter: blur(40px) saturate(180%);
 	border-radius: 18px;
 	border: 1px solid rgba(255,255,255,0.08);
-	font-family: "Segoe UI Variable", "Segoe UI", -apple-system, system-ui, sans-serif;
 	font-size: 12px; color: rgba(255,255,255,0.82);
 	overflow: hidden;
 	box-shadow:
@@ -354,9 +353,9 @@ async function closeWindow() {
 .project-color {
 	width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
-.project-name { flex: 1; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.4); }
+.project-name { flex: 1; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.55); }
 .project-meta { display: flex; align-items: center; gap: 6px; }
-.project-count { font-size: 9px; color: rgba(255,255,255,0.25); }
+.project-count { font-size: 9px; color: rgba(255,255,255,0.5); }
 
 .btn-group-toggle {
 	width: 20px; height: 20px;
@@ -380,10 +379,10 @@ async function closeWindow() {
 .widget-footer {
 	display: flex; justify-content: space-between; align-items: center;
 	padding: 7px 14px; border-top: 1px solid rgba(255,255,255,0.05);
-	font-size: 9px; color: rgba(255,255,255,0.2);
+	font-size: 9px; color: rgba(255,255,255,0.5);
 	flex-shrink: 0; background: rgba(0,0,0,0.15);
 }
-.footer-version { color: rgba(255,255,255,0.15); font-size: 9px; }
+.footer-version { color: rgba(255,255,255,0.5); font-size: 9px; }
 .footer-right { display: flex; align-items: center; gap: 5px; }
 .status-dot {
 	width: 5px; height: 5px; border-radius: 50%;

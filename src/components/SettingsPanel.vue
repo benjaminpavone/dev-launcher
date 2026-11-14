@@ -301,20 +301,20 @@ async function save() {
 
 .btn-add {
 	background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15);
-	border-radius: 7px; padding: 6px; color: rgba(255,255,255,0.35);
+	border-radius: 7px; padding: 6px; color: rgba(255,255,255,0.55);
 	font-size: 10px; font-family: inherit; cursor: pointer; width: 100%;
 	transition: all 0.15s;
 }
-.btn-add:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+.btn-add:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
 .btn-add--project {
-	border-color: rgba(124,58,237,0.25); color: rgba(167,139,250,0.6);
+	border-color: rgba(124,58,237,0.25); color: rgba(167,139,250,0.9);
 }
 .btn-add--project:hover { border-color: rgba(124,58,237,0.5); color: #a78bfa; }
 
 .btn-danger {
 	width: 26px; height: 26px; flex-shrink: 0;
 	background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.15);
-	border-radius: 6px; color: rgba(248,113,113,0.5);
+	border-radius: 6px; color: rgba(248,113,113,0.75);
 	cursor: pointer; display: flex; align-items: center; justify-content: center;
 	transition: all 0.15s;
 }
@@ -333,10 +333,10 @@ async function save() {
 
 .btn-cancel {
 	background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-	border-radius: 7px; padding: 5px 12px; color: rgba(255,255,255,0.4);
+	border-radius: 7px; padding: 5px 12px; color: rgba(255,255,255,0.6);
 	font-size: 11px; font-family: inherit; cursor: pointer; transition: all 0.15s;
 }
-.btn-cancel:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+.btn-cancel:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
 
 .btn-save {
 	background: linear-gradient(135deg, rgba(124,58,237,0.7), rgba(109,40,217,0.9));

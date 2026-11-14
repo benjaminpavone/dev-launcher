@@ -100,7 +100,7 @@
 							<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
 						</svg>
 					</button>
-					<button class="log-clear" @click="$emit('clearLogs', service.id)">clear</button>
+					<button class="log-clear" @click="$emit('clearLogs', service.id)" title="Clear logs">Clear</button>
 				</div>
 				<div class="log-body" ref="logBodyRef">
 					<div v-if="!service.logs?.length" class="log-empty">No logs yet.</div>
@@ -138,7 +138,7 @@
 								/>
 								<button v-if="logSearch" class="log-search-clear" @click="logSearch = ''" title="Clear">×</button>
 							</div>
-							<button class="log-clear" @click="$emit('clearLogs', service.id)">clear</button>
+							<button class="log-clear" @click="$emit('clearLogs', service.id)" title="Clear logs">Clear</button>
 							<button class="log-modal-close" @click="showLogsModal = false" title="Close">
 								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 									<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -300,7 +300,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 }
 .svc-status {
 	display: flex; align-items: center; gap: 4px;
-	font-size: 9px; color: rgba(255,255,255,0.28);
+	font-size: 9px; color: rgba(255,255,255,0.5);
 	text-transform: uppercase; letter-spacing: 0.4px;
 }
 .status--running .svc-status  { color: #4ade80; }
@@ -389,7 +389,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	border-radius: 8px;
 	border: 1px solid rgba(255,255,255,0.07);
 	background: rgba(255,255,255,0.04);
-	color: rgba(255,255,255,0.25);
+	color: rgba(255,255,255,0.4);
 	cursor: pointer;
 	display: flex; align-items: center; justify-content: center;
 	transition: all 0.18s;
@@ -409,19 +409,26 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .log-header {
 	display: flex; align-items: center; gap: 8px;
 	padding: 5px 10px 4px 14px;
-	font-size: 9px; color: rgba(255,255,255,0.2);
+	font-size: 9px; color: rgba(255,255,255,0.5);
 	text-transform: uppercase; letter-spacing: 0.5px;
 	border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 .log-title { flex-shrink: 0; }
 .log-clear {
-	background: none; border: none;
-	color: rgba(255,255,255,0.2); cursor: pointer;
-	font-size: 9px; font-family: inherit;
-	transition: color 0.15s; padding: 0;
 	flex-shrink: 0;
+	height: 22px; padding: 0 8px;
+	border-radius: 6px;
+	border: 1px solid rgba(255,255,255,0.07);
+	background: rgba(255,255,255,0.04);
+	color: rgba(255,255,255,0.65); cursor: pointer;
+	font-size: 10px; font-family: inherit;
+	transition: all 0.15s;
 }
-.log-clear:hover { color: rgba(255,255,255,0.5); }
+.log-clear:hover {
+	background: rgba(220,38,38,0.15);
+	border-color: rgba(220,38,38,0.3);
+	color: #fca5a5;
+}
 
 /* Search field */
 .log-search-wrap {
@@ -434,7 +441,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	transition: border-color 0.15s;
 }
 .log-search-wrap:focus-within { border-color: rgba(124,58,237,0.45); }
-.log-search-icon { color: rgba(255,255,255,0.25); flex-shrink: 0; }
+.log-search-icon { color: rgba(255,255,255,0.4); flex-shrink: 0; }
 .log-search {
 	flex: 1; min-width: 0;
 	background: none; border: none; outline: none;
@@ -442,7 +449,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	font-family: inherit; font-size: 10px;
 	text-transform: none; letter-spacing: 0;
 }
-.log-search::placeholder { color: rgba(255,255,255,0.25); }
+.log-search::placeholder { color: rgba(255,255,255,0.55); }
 .log-search-clear {
 	background: none; border: none; padding: 0;
 	color: rgba(255,255,255,0.35); cursor: pointer;
@@ -458,7 +465,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	border-radius: 6px;
 	border: 1px solid rgba(255,255,255,0.07);
 	background: rgba(255,255,255,0.04);
-	color: rgba(255,255,255,0.3);
+	color: rgba(255,255,255,0.4);
 	cursor: pointer;
 	display: flex; align-items: center; justify-content: center;
 	transition: all 0.15s;
@@ -482,10 +489,10 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 }
 .log-body::-webkit-scrollbar { width: 3px; }
 .log-body::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 2px; }
-.log-empty { font-size: 10px; color: rgba(255,255,255,0.15); font-style: italic; }
+.log-empty { font-size: 10px; color: rgba(255,255,255,0.45); font-style: italic; }
 .log-line { display: flex; gap: 8px; font-size: 10px; line-height: 1.6; }
-.log-time { color: rgba(255,255,255,0.18); flex-shrink: 0; font-variant-numeric: tabular-nums; user-select: text; }
-.log-text { color: rgba(255,255,255,0.5); word-break: break-all; font-family: "Cascadia Code","Consolas","SF Mono","Menlo",monospace; user-select: text; }
+.log-time { color: rgba(255,255,255,0.45); flex-shrink: 0; font-variant-numeric: tabular-nums; user-select: text; }
+.log-text { color: rgba(255,255,255,0.75); word-break: break-all; font-family: "Cascadia Code","Consolas","SF Mono","Menlo",monospace; user-select: text; }
 .log-text.error { color: #fca5a5; }
 .log-text.warn  { color: #fde68a; }
 
@@ -537,7 +544,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .svc-icon-mini { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .log-modal-sub {
 	font-size: 9px; font-weight: 500;
-	color: rgba(255,255,255,0.25);
+	color: rgba(255,255,255,0.5);
 	text-transform: uppercase; letter-spacing: 0.5px;
 }
 .log-search-wrap--modal { flex: 1; max-width: 340px; padding: 4px 8px; }
@@ -573,7 +580,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .log-modal-footer {
 	flex-shrink: 0;
 	padding: 6px 14px;
-	font-size: 9px; color: rgba(255,255,255,0.3);
+	font-size: 9px; color: rgba(255,255,255,0.5);
 	text-transform: uppercase; letter-spacing: 0.5px;
 	border-top: 1px solid rgba(255,255,255,0.05);
 	background: rgba(0,0,0,0.15);
