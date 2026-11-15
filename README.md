@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/benjaminpavone/dev-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/benjaminpavone/dev-launcher/actions/workflows/ci.yml)
 
-A small, transparent, always-on-top Windows widget to start, stop and monitor your local dev servers — uvicorn, npm/Vite, Docker containers — without keeping a terminal open for each of them.
+A small, transparent, always-on-top desktop widget to start, stop and monitor your local dev servers — uvicorn, npm/Vite, Docker containers — without keeping a terminal open for each of them.
 
-**Windows only** for now; a macOS version is planned.
+**Windows**: download below. **macOS**: runs from source (see [Development](#development)); a packaged macOS version is planned.
 
-<p align="center"><img src="docs/screenshot.png" alt="Dev Launcher widget with two projects and a Docker service running" width="300"></p>
+<p align="center"><img src="docs/screenshot.png" alt="Dev Launcher widget with two projects and a Docker service running, each server showing its port" width="300"></p>
 
 ## Download
 
@@ -62,14 +62,14 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'uvicorn' }
 
 ## Development
 
-Built with **Tauri 2** (Rust) and **Vue 3**. Prerequisites: [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/) and the [Tauri prerequisites for Windows](https://tauri.app/start/prerequisites/).
+Built with **Tauri 2** (Rust) and **Vue 3**. Prerequisites: [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/) and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your system.
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-The CI runs Clippy and the unit tests on Windows for each push. To build the installers and publish a release, see [docs/RELEASING.md](docs/RELEASING.md).
+The CI runs Clippy and the unit tests on Windows and macOS for each push. To build the installers and publish a release, see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## License
 
