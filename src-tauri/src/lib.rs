@@ -172,6 +172,7 @@ fn hidden_cmd(command_line: &str) -> Command {
 fn hidden_cmd(command_line: &str) -> Command {
 	let mut cmd = Command::new("sh");
 	cmd.arg("-c").arg(command_line).process_group(0);
+	use_login_path(&mut cmd);
 	cmd
 }
 
@@ -181,7 +182,73 @@ fn docker(args: &[&str]) -> Result<Output, String> {
 	cmd.args(args);
 	#[cfg(windows)]
 	cmd.creation_flags(CREATE_NO_WINDOW);
+	#[cfg(unix)]
+	use_login_path(&mut cmd);
 	cmd.output().map_err(|e| format!("Cannot run docker: {}", e))
+}
+
+// ── macOS PATH ────────────────────────────────────────────────────────────────
+// An app opened from the Finder or the Dock gets a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin):
+// no nvm, Homebrew, conda or Docker. Commands get the PATH of the user's shell instead, as in
+// a terminal. It is read once in the background at startup: an interactive shell can take
+// several seconds to load, and a command started meanwhile waits for it.
+
+#[cfg(unix)]
+fn use_login_path(cmd: &mut Command) {
+	#[cfg(target_os = "macos")]
+	if let Some(path) = login_path() {
+		cmd.env("PATH", path);
+	}
+	#[cfg(not(target_os = "macos"))]
+	let _ = cmd;
+}
+
+#[cfg(target_os = "macos")]
+fn login_path() -> Option<&'static str> {
+	static LOGIN_PATH: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+	LOGIN_PATH.get_or_init(read_login_path).as_deref()
+}
+
+#[cfg(target_os = "macos")]
+const PATH_MARKER: &str = "__DEV_LAUNCHER_PATH__";
+
+/// Asks the user's interactive login shell for its PATH. Started from a terminal (`tauri dev`,
+/// tests), the app already has it. Gives up after 15 seconds, keeping the current PATH.
+#[cfg(target_os = "macos")]
+fn read_login_path() -> Option<String> {
+	if std::env::var_os("TERM").is_some() {
+		return None;
+	}
+	let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+	let child = Command::new(shell)
+		.arg("-ilc")
+		.arg(format!("printf '{}%s' \"$PATH\"", PATH_MARKER))
+		.stdin(Stdio::null())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::null())
+		.process_group(0)
+		.spawn()
+		.ok()?;
+	let pid = child.id();
+	let (sender, receiver) = std::sync::mpsc::channel();
+	std::thread::spawn(move || {
+		let _ = sender.send(child.wait_with_output());
+	});
+	match receiver.recv_timeout(Duration::from_secs(15)) {
+		Ok(Ok(output)) => parse_login_path(&String::from_utf8_lossy(&output.stdout)),
+		_ => {
+			kill_process_trees(&[pid]);
+			None
+		}
+	}
+}
+
+/// The PATH printed after the marker; whatever the shell config printed before is ignored.
+#[cfg(target_os = "macos")]
+fn parse_login_path(output: &str) -> Option<String> {
+	let (_, path) = output.rsplit_once(PATH_MARKER)?;
+	let path = path.trim();
+	(!path.is_empty()).then(|| path.to_string())
 }
 
 fn docker_status(container: &str) -> String {
@@ -681,6 +748,8 @@ fn shutdown(app: AppHandle, state: State<'_, AppState>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+	#[cfg(target_os = "macos")]
+	std::thread::spawn(login_path);
 	tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
 		.manage(AppState::default())
@@ -984,5 +1053,14 @@ mod tests {
 		assert!(port_is_open(port));
 		drop(listener);
 		assert!(!port_is_open(port));
+	}
+
+	#[cfg(target_os = "macos")]
+	#[test]
+	fn parse_login_path_ignores_what_the_shell_config_prints() {
+		let output = format!("Welcome!\n\x1b[32mnvm loaded\x1b[0m\n{}/usr/local/bin:/usr/bin:/bin\n", PATH_MARKER);
+		assert_eq!(parse_login_path(&output).as_deref(), Some("/usr/local/bin:/usr/bin:/bin"));
+		assert_eq!(parse_login_path("no marker at all"), None);
+		assert_eq!(parse_login_path(PATH_MARKER), None);
 	}
 }

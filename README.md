@@ -4,7 +4,7 @@
 
 A small, transparent, always-on-top desktop widget to start, stop and monitor your local dev servers — uvicorn, npm/Vite, Docker containers — without keeping a terminal open for each of them.
 
-**Windows**: download below. **macOS**: runs from source (see [Development](#development)); a packaged macOS version is planned.
+For **Windows** and **macOS** (Intel and Apple Silicon).
 
 <p align="center"><img src="docs/screenshot.png" alt="Dev Launcher widget with two projects and a Docker service running, each server showing its port" width="300"></p>
 
@@ -16,6 +16,8 @@ From the [Releases](../../releases) page, built by GitHub Actions from the tagge
 - **`dev-launcher_<version>_x64-setup.exe`**: installer with a Start menu shortcut and an uninstaller.
 
 The app is not code-signed, so Windows SmartScreen may warn on first launch: click **More info**, then **Run anyway**.
+
+On macOS, download **`dev-launcher_<version>_universal.dmg`**, open it and drag Dev Launcher to Applications. The app is not signed by Apple, so macOS blocks it the first time: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (on macOS 14 and earlier, you can also Control-click the app and choose **Open**).
 
 ## Getting started
 
@@ -35,6 +37,8 @@ The app is not code-signed, so Windows SmartScreen may warn on first launch: cli
 - **Shell** (fire & forget): opens an app such as VS Code, Teams or a `.bat`. It shows as *Launched* but is not tracked: clicking its button again only marks it as stopped, nothing is killed.
 
 Closing Dev Launcher stops every Normal service it started. Docker containers and Shell apps keep running.
+
+On macOS, commands run with the `PATH` of your shell, as in a terminal, even when the app is opened from the Finder or the Dock: tools installed with Homebrew, nvm or conda are found. The shell is read once at startup, so a service started right away may stay a few seconds in *Starting…* if your shell is slow to load.
 
 ## Logs
 

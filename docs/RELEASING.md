@@ -16,4 +16,11 @@ After each release, add a section at the top of [`CHANGELOG.md`](../CHANGELOG.md
 
 ## GitHub release
 
-To publish installers on GitHub, push a tag matching the version: `git tag v1.0.0 && git push origin v1.0.0`. The [release workflow](../.github/workflows/release.yml) builds on a Windows runner and attaches the installers to a draft release, which you then publish.
+To publish installers on GitHub, push a tag matching the version: `git tag v1.0.0 && git push origin v1.0.0`. The [release workflow](../.github/workflows/release.yml) builds the Windows installers on a Windows runner, then the universal macOS dmg on a macOS runner, and attaches them to a draft release, which you then publish.
+
+To build the macOS dmg locally, with the same command as the workflow:
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri build -- --target universal-apple-darwin --bundles dmg
+```

@@ -6,7 +6,7 @@
 
 - **Update notice**: at startup, the app asks the GitHub API for the latest release and, when it is newer, shows `vX.Y.Z available` in the footer, linking to the release page. Nothing is downloaded automatically. **Check for updates** in the settings turns it off
 - **Port link**: a Normal service shows its port next to *Running* (`RUNNING · :5173`) once it answers, and a click opens it in the browser. The port is read from the first local URL the server prints in its logs (Vite, uvicorn, Flask, Django, Next.js, ASP.NET, Laravel…), with no setting to fill in
-- **macOS support, in progress**: the app builds, runs and passes its tests on macOS, and the CI checks both systems. The window is not blurred on macOS, where it is more opaque by default (97%, at least 85%). No macOS release yet
+- **macOS version**: a universal `.dmg` (Intel and Apple Silicon) is built by the release workflow, next to the Windows installers, and the CI checks both systems. Commands get the `PATH` of the user's shell, so Homebrew, nvm or conda tools are found even when the app is opened from the Finder. The window is not blurred on macOS, where it is more opaque by default (97%, at least 85%). The app is signed ad hoc only, not by Apple: Gatekeeper asks for a confirmation on first launch
 - **Unit tests** for the pure Rust logic: ANSI stripping, log level detection, service config helpers, config defaults and the embedded default config, run by the CI
 
 ### Security
