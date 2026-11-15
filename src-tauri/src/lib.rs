@@ -19,6 +19,9 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 /// Default config embedded at compile time, copied to the app data folder on first launch.
 const DEFAULT_CONFIG: &str = include_str!("../../config.json");
 
+/// Page of the latest release, opened when the widget shows that an update is available
+const RELEASES_URL: &str = "https://github.com/benjaminpavone/dev-launcher/releases/latest";
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -70,8 +73,11 @@ struct Config {
 	projects: Vec<ProjectConfig>,
 	#[serde(default = "default_opacity")]
 	opacity: f64,
-	#[serde(default = "default_always_on_top")]
+	#[serde(default = "default_true")]
 	always_on_top: bool,
+	/// Ask GitHub at startup whether a newer release exists
+	#[serde(default = "default_true")]
+	check_updates: bool,
 }
 
 /// Higher on macOS, where the background behind the widget is not blurred (see App.vue).
@@ -83,7 +89,7 @@ fn default_opacity() -> f64 {
 	}
 }
 
-fn default_always_on_top() -> bool {
+fn default_true() -> bool {
 	true
 }
 
@@ -634,23 +640,33 @@ async fn get_service_status(app: AppHandle, state: State<'_, AppState>, service_
 	}
 }
 
-/// Opens the service's local URL in the default browser. The URL is built here from
-/// what the service printed, so the webview can only open localhost addresses.
-#[tauri::command]
-fn open_service_url(state: State<'_, AppState>, service_id: String) -> Result<(), String> {
-	let url = state.urls.lock().unwrap().get(&service_id).copied().ok_or("No local URL for this service")?;
+/// Opens a URL built by the app itself (never one sent by the webview) in the default browser.
+fn open_in_browser(url: &str) -> Result<(), String> {
 	#[cfg(windows)]
-	let mut cmd = hidden_cmd(&format!("start \"\" {}", url.to_url()));
+	let mut cmd = hidden_cmd(&format!("start \"\" {}", url));
 	#[cfg(target_os = "macos")]
 	let mut cmd = Command::new("open");
 	#[cfg(all(unix, not(target_os = "macos")))]
 	let mut cmd = Command::new("xdg-open");
 	#[cfg(unix)]
-	cmd.arg(url.to_url());
+	cmd.arg(url);
 	let mut child = cmd.spawn().map_err(|e| format!("Cannot open the browser: {}", e))?;
 	// Reaps the launcher once it exits, so it does not stay as a zombie process
 	std::thread::spawn(move || child.wait());
 	Ok(())
+}
+
+/// Opens the service's local URL. The URL is built from the port the service printed,
+/// so the webview can only open localhost addresses.
+#[tauri::command]
+fn open_service_url(state: State<'_, AppState>, service_id: String) -> Result<(), String> {
+	let url = state.urls.lock().unwrap().get(&service_id).copied().ok_or("No local URL for this service")?;
+	open_in_browser(&url.to_url())
+}
+
+#[tauri::command]
+fn open_releases_page() -> Result<(), String> {
+	open_in_browser(RELEASES_URL)
 }
 
 /// Stops every process (Docker containers are left running), then exits.
@@ -675,6 +691,7 @@ pub fn run() {
 			stop_service,
 			get_service_status,
 			open_service_url,
+			open_releases_page,
 			shutdown,
 		])
 		.build(tauri::generate_context!())
@@ -871,6 +888,7 @@ mod tests {
 		let config: Config = serde_json::from_str(json).expect("minimal config should parse");
 		assert_eq!(config.opacity, default_opacity());
 		assert!(config.always_on_top);
+		assert!(config.check_updates);
 		let svc = &config.projects[0].services[0];
 		assert_eq!(svc.service_type, None);
 		assert_eq!(svc.conda_env, None);
@@ -879,10 +897,11 @@ mod tests {
 
 	#[test]
 	fn config_keeps_explicit_values() {
-		let json = r#"{ "projects": [], "opacity": 0.5, "always_on_top": false }"#;
+		let json = r#"{ "projects": [], "opacity": 0.5, "always_on_top": false, "check_updates": false }"#;
 		let config: Config = serde_json::from_str(json).expect("config should parse");
 		assert_eq!(config.opacity, 0.5);
 		assert!(!config.always_on_top);
+		assert!(!config.check_updates);
 	}
 
 	#[test]

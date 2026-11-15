@@ -81,7 +81,13 @@
 
 		<!-- Footer -->
 		<div class="widget-footer">
-			<span class="footer-version">v{{ appVersion }}</span>
+			<span class="footer-version">
+				v{{ appVersion }}
+				<template v-if="newerVersion">
+					·
+					<button class="footer-update" @click="openReleases" title="Open the release page">v{{ newerVersion }} available</button>
+				</template>
+			</span>
 			<div class="footer-right">
 				<div class="status-dot" :class="{ 'all-good': runningCount === totalCount, error: hasError }"></div>
 				<span>{{ runningCount }} running</span>
@@ -102,7 +108,7 @@ import { isMac, DEFAULT_OPACITY, MIN_OPACITY } from "./platform.js";
 const appVersion = __APP_VERSION__;
 
 const projects = ref([]);
-const rawConfig = ref({ projects: [], opacity: DEFAULT_OPACITY, always_on_top: true });
+const rawConfig = ref({ projects: [], opacity: DEFAULT_OPACITY, always_on_top: true, check_updates: true });
 const opacity = ref(DEFAULT_OPACITY);
 const showSettings = ref(false);
 const isMaximized = ref(false);
@@ -132,6 +138,7 @@ async function loadConfig() {
 		await setupLogListeners();
 		startPolling();
 		pollOnce();
+		if (config.check_updates ?? true) checkForUpdate();
 	} catch (e) {
 		console.error("Failed to load config:", e);
 	}
@@ -150,6 +157,47 @@ async function setupLogListeners() {
 async function onConfigSaved() {
 	showSettings.value = false;
 	await loadConfig();
+}
+
+// ── Update check ───────────────────────────────────────────────────────────
+// One request per app launch to the public GitHub API; any failure (offline, rate limit) is ignored.
+const RELEASES_API = "https://api.github.com/repos/benjaminpavone/dev-launcher/releases/latest";
+const latestVersion = ref(null);
+let updateChecked = false;
+const newerVersion = computed(() =>
+	rawConfig.value.check_updates !== false && latestVersion.value && isNewer(latestVersion.value, appVersion)
+		? latestVersion.value
+		: null
+);
+
+async function checkForUpdate() {
+	if (updateChecked) return;
+	updateChecked = true;
+	try {
+		const response = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json" } });
+		if (!response.ok) return;
+		const { tag_name } = await response.json();
+		latestVersion.value = String(tag_name ?? "").replace(/^v/, "");
+	} catch {}
+}
+
+// Compares "1.2.0" with "1.10.0" number by number
+function isNewer(version, current) {
+	const a = version.split(".").map(Number);
+	const b = current.split(".").map(Number);
+	for (let i = 0; i < Math.max(a.length, b.length); i++) {
+		const x = a[i] || 0, y = b[i] || 0;
+		if (x !== y) return x > y;
+	}
+	return false;
+}
+
+async function openReleases() {
+	try {
+		await invoke("open_releases_page");
+	} catch (e) {
+		console.error("Failed to open the release page:", e);
+	}
 }
 
 // ── Status polling ─────────────────────────────────────────────────────────
@@ -405,6 +453,11 @@ async function closeWindow() {
 	flex-shrink: 0; background: rgba(0,0,0,0.15);
 }
 .footer-version { color: rgba(255,255,255,0.5); font-size: 9px; }
+.footer-update {
+	background: none; border: none; padding: 0;
+	font: inherit; color: #a78bfa; cursor: pointer;
+}
+.footer-update:hover { color: #c4b5fd; text-decoration: underline; }
 .footer-right { display: flex; align-items: center; gap: 5px; }
 .status-dot {
 	width: 5px; height: 5px; border-radius: 50%;

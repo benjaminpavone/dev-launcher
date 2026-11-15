@@ -44,6 +44,8 @@ Each Normal or Docker service has a **Logs** button showing its live output, wit
 
 The settings panel also sets the widget **opacity** and whether it stays **always on top** (on by default).
 
+**Updates**: at startup, Dev Launcher asks the GitHub API once for the latest release. When a newer version exists, the footer shows `vX.Y.Z available`: click it to open the release page, then download and install it as usual. Nothing is downloaded or installed automatically. Like any web request, it lets GitHub see your IP address; the check can be turned off with **Check for updates** in the settings.
+
 Everything is saved in `%APPDATA%\com.devlauncher.app\config.json`. You can back up this file, or edit it by hand while the app is closed.
 
 ## Troubleshooting: servers left running

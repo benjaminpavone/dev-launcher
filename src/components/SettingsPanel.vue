@@ -30,6 +30,12 @@
 					<input type="checkbox" v-model="localConfig.always_on_top" class="input--switch" />
 				</label>
 
+				<!-- Update check setting -->
+				<label class="setting-block setting-row setting-toggle" title="Asks GitHub at startup whether a newer release exists">
+					<span class="setting-label">Check for updates</span>
+					<input type="checkbox" v-model="localConfig.check_updates" class="input--switch" />
+				</label>
+
 				<div v-for="(project, pi) in localConfig.projects" :key="project.id" class="project-block">
 					<!-- Project header -->
 					<div class="project-row">
@@ -119,7 +125,7 @@ const props = defineProps({ config: { type: Object, required: true } });
 const emit = defineEmits(["close", "saved"]);
 
 // Deep clone to avoid mutating parent before save
-const localConfig = ref({ opacity: DEFAULT_OPACITY, always_on_top: true, ...JSON.parse(JSON.stringify(props.config)) });
+const localConfig = ref({ opacity: DEFAULT_OPACITY, always_on_top: true, check_updates: true, ...JSON.parse(JSON.stringify(props.config)) });
 localConfig.value.opacity = Math.max(localConfig.value.opacity, MIN_OPACITY);
 // A normal service has no service_type in the file: show it as "Normal" in the select
 localConfig.value.projects.forEach(p => p.services.forEach(s => { s.service_type ??= ""; }));

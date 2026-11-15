@@ -55,5 +55,6 @@
 			]
 		}
 	],
-	"always_on_top": true
+	"always_on_top": true,
+	"check_updates": true
 }
