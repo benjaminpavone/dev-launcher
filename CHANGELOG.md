@@ -9,6 +9,10 @@
 - **macOS support, in progress**: the app builds, runs and passes its tests on macOS, and the CI checks both systems. The window is not blurred on macOS, where it is more opaque by default (97%, at least 85%). No macOS release yet
 - **Unit tests** for the pure Rust logic: ANSI stripping, log level detection, service config helpers, config defaults and the embedded default config, run by the CI
 
+### Security
+
+- **Vite 8.3.8** and `@vitejs/plugin-vue` 6.0.11: Vite 8.3.7 fixes a critical dev server flaw (GHSA-p4f5-76q4-ffq7) that only applies when the dev server is exposed to the network with `--host`, which this project does not do. Vite is a build tool: the released app never contained it
+
 ## [1.0.0] - 2026-11-09
 
 First public release.
